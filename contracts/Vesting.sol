@@ -28,13 +28,15 @@ contract Vesting is Ownable, ReentrancyGuard {
     mapping(address => LockVesting) public locks;
     address[] beneficiaries;
 
+    event RankingUpdated(uint8 cmcRankValue);
+
     modifier onlyOperator() {
-        require(msg.sender == operator, "Caller is not the operator");
+        require(msg.sender == operator, "caller is not the operator");
         _;
     }
 
     modifier onlyOracle() {
-        require(msg.sender == oracle, "Caller is not the oracle");
+        require(msg.sender == oracle, "caller is not the oracle");
         _;
     }
 
@@ -61,7 +63,11 @@ contract Vesting is Ownable, ReentrancyGuard {
         oracle = _oracle;
     }
 
+    /// @notice This function it's executed by the operator and begins the first
+    /// epoch of vesting.
+    /// @dev All locks should be created before init.
     function initialize() external onlyOperator notInitialized {
+        require(totalVestingAmount != 0, "locks were not created");
         require(
             totalVestingAmount == IERC20(token).balanceOf(address(this)),
             "vesting amount and token balance are different"
@@ -79,7 +85,7 @@ contract Vesting is Ownable, ReentrancyGuard {
         onlyOperator
         notInitialized
     {
-        require(_amount != 0, "_amount is required");
+        require(_amount != 0, "amount is required");
         require(_beneficiary != address(0), "beneficiary address is required");
         require(
             locks[_beneficiary].totalAmount == 0,
@@ -101,6 +107,10 @@ contract Vesting is Ownable, ReentrancyGuard {
         oracle = _oracle;
     }
 
+    /// @notice This function it's executed by the oracle account to update the
+    /// CMC ranking value and release the funds if it is possible.
+    /// @dev This function returns a tuple with the following values:
+    /// @param _newCmcRank new CMS rank value.
     function updateRank(uint8 _newCmcRank)
         external
         onlyOracle
@@ -128,9 +138,11 @@ contract Vesting is Ownable, ReentrancyGuard {
                 "token transfer fail"
             );
         }
+
+        emit RankingUpdated(lastCmcRank);
     }
 
-    /// @notice This function it's executed by the locks to check the
+    /// @notice This function can be executed by the beneficiaries to check the
     /// state of the vesting.
     /// @dev This function returns a tuple with the following values:
     ///  releasableAmount = amount of tokens available to withdraw at the time.
