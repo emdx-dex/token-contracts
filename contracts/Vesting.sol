@@ -4,10 +4,9 @@ pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Vesting is Ownable, ReentrancyGuard {
+contract Vesting is Ownable {
     using SafeMath for uint8;
     using SafeMath for uint256;
 
@@ -19,6 +18,7 @@ contract Vesting is Ownable, ReentrancyGuard {
     uint256 public totalVestingAmount;
     uint256 public scoringEpochSize = 60 days;
     bool public initialized;
+    bool public finalized;
 
     struct LockVesting {
         uint256 totalAmount;
@@ -41,12 +41,17 @@ contract Vesting is Ownable, ReentrancyGuard {
     }
 
     modifier notInitialized() {
-        require(!initialized, "contract instance has already been initialized");
+        require(!initialized, "vesting has already been initialized");
         _;
     }
 
     modifier isInitialized() {
-        require(initialized, "contract instance has not been initialized");
+        require(initialized, "vesting has not been initialized");
+        _;
+    }
+
+    modifier notFinalized() {
+        require(!finalized, "vesting it's finalized");
         _;
     }
 
@@ -114,8 +119,8 @@ contract Vesting is Ownable, ReentrancyGuard {
     function updateRank(uint8 _newCmcRank)
         external
         onlyOracle
-        nonReentrant
         isInitialized
+        notFinalized
     {
         require(
             rankUdatedAt + scoringEpochSize < _currentTime(),
@@ -139,25 +144,26 @@ contract Vesting is Ownable, ReentrancyGuard {
             );
         }
 
-        emit RankingUpdated(lastCmcRank);
+        if (_newCmcRank == 100) {
+            finalized = true;
+        }
+
+        emit RankingUpdated(_newCmcRank);
     }
 
     /// @notice This function can be executed by the beneficiaries to check the
     /// state of the vesting.
     /// @dev This function returns a tuple with the following values:
-    ///  releasableAmount = amount of tokens available to withdraw at the time.
     ///  totalAmount = the total amount of the vesting.
     ///  releasedAmount = the amount of tokens that has already vested.
     function vestingDetails(address _beneficiary)
         external
         view
         returns (
-            uint256 releasableAmount,
             uint256 totalAmount,
             uint256 releasedAmount
         )
     {
-        releasableAmount = _releasableAmount(_beneficiary);
         totalAmount = locks[_beneficiary].totalAmount;
         releasedAmount = locks[_beneficiary].releasedAmount;
     }

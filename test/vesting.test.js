@@ -1,4 +1,5 @@
 require('chai').should();
+const assert = require('chai').assert;
 const { expect } = require('chai');
 const { accounts, contract } = require('@openzeppelin/test-environment');
 const {
@@ -6,17 +7,19 @@ const {
   expectEvent,
   expectRevert,
   constants,
+  time
 } = require('@openzeppelin/test-helpers');
 const { ZERO_ADDRESS } = constants;
 
 const EMDXToken = contract.fromArtifact('EMDXToken');
-const Vesting = contract.fromArtifact("Vesting");
+const Vesting = contract.fromArtifact("VestingTest");
 
 describe('Vesting', async () => {
-  const [owner, operator, oracle, beneficiary] = accounts;
-  const start = new BN(Date.now());
-  // Beneficiary amount (300 ether)
-  const amount = new BN("300000000000000000000");
+  const owner = accounts[60];
+  const operator = accounts[61]
+  const oracle = accounts[62];
+  const beneficiary = accounts[63];
+  const scoringEpochSize = 50;
 
   describe('#constructor', async () => {
     before(async () => {
@@ -25,8 +28,9 @@ describe('Vesting', async () => {
 
     it('check constructor parameters', async () => {
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, { from: owner }
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
       );
+
       const op = await this.vesting.operator();
       assert.equal(operator, op);
 
@@ -41,9 +45,23 @@ describe('Vesting', async () => {
     });
 
     it('validate constructor parameters', async () => {
-      await expectRevert(Vesting.new(ZERO_ADDRESS, operator, oracle), "token address is required");
-      await expectRevert(Vesting.new(this.token.address, ZERO_ADDRESS, oracle), "operator address is required");
-      await expectRevert(Vesting.new(this.token.address, operator, ZERO_ADDRESS), "oracle address is required");
+      await expectRevert(
+        Vesting.new(ZERO_ADDRESS, operator, oracle, scoringEpochSize),
+        "token address is required"
+      );
+      await expectRevert(
+        Vesting.new(this.token.address, ZERO_ADDRESS, oracle, scoringEpochSize),
+        "operator address is required"
+      );
+      await expectRevert(
+        Vesting.new(
+          this.token.address,
+          operator,
+          ZERO_ADDRESS,
+          scoringEpochSize
+        ),
+        "oracle address is required"
+      );
     });
   });
 
@@ -51,7 +69,7 @@ describe('Vesting', async () => {
     before(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, { from: owner }
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
       );
     })
 
@@ -89,7 +107,7 @@ describe('Vesting', async () => {
     before(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, { from: owner }
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
       );
     });
 
@@ -142,7 +160,7 @@ describe('Vesting', async () => {
     beforeEach(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, { from: owner }
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
       );
     });
 
@@ -183,17 +201,134 @@ describe('Vesting', async () => {
       await this.vesting.initialize({ from: operator });
       await expectRevert(
         this.vesting.grantVesting(beneficiary, 1, { from: operator }),
-        "contract instance has already been initialized"
+        "vesting has already been initialized"
       );
       const details = await this.vesting.vestingDetails(beneficiary);
       expect(details.totalAmount.toString()).to.equal('1');
-      expect(details.releasableAmount.toString()).to.equal('0');
       expect(details.releasedAmount.toString()).to.equal('0');
     });
   });
 
   describe('#updateRank', async () => {
+    before(async () => {
+      this.token = await EMDXToken.new({ from: owner });
+      this.vesting = await Vesting.new(
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+      );
+    });
+    it('only oracle can update rank', async () => {
+      await expectRevert(
+        this.vesting.updateRank(1, { from: operator }),
+        "caller is not the oracle"
+      );
+      await expectRevert(
+        this.vesting.updateRank(1, { from: owner }),
+        "caller is not the oracle"
+      );
+    });
 
+    it('can not update rank if it is not initialized', async () => {
+      await expectRevert(
+        this.vesting.updateRank(1, { from: oracle }),
+        "vesting has not been initialized"
+      );
+    });
+
+    it('can not update rank if it is not initialized', async () => {
+      await expectRevert(
+        this.vesting.updateRank(1, { from: oracle }),
+        "vesting has not been initialized"
+      );
+    });
+
+    it('can not update before 1st epoch ends', async () => {
+      const epochSize = 60 * 60; // 1h
+      const newVesting = await Vesting.new(
+        this.token.address, operator, oracle, epochSize, { from: owner }
+      );
+
+      await this.token.transfer(newVesting.address, 1, { from: owner });
+      await newVesting.grantVesting(beneficiary, 1, { from: operator });
+      await newVesting.initialize({ from: operator });
+
+      // Try to update rank before 1h
+      await expectRevert(
+        newVesting.updateRank(1, { from: oracle }),
+        "scoring epoch still not finished"
+      );
+    });
+
+    it('rank value range', async () => {
+      const epochSize = 1; // 1 sec
+      const newVesting = await Vesting.new(
+        this.token.address, operator, oracle, epochSize, { from: owner }
+      );
+
+      await this.token.transfer(newVesting.address, 1, { from: owner });
+      await newVesting.grantVesting(beneficiary, 1, { from: operator });
+      await newVesting.initialize({ from: operator });
+
+      await time.increase(epochSize + 1);
+      // values below 0 are not tested since _newCmcRank parameter of updateRank
+      // function is uint8 (unsigned integer)
+      await expectRevert(
+        newVesting.updateRank(101, { from: oracle }),
+        "invalid rank value"
+      );
+      newVesting.updateRank(100, { from: oracle });
+
+      assert.equal(await this.token.balanceOf(beneficiary), 1);
+
+      await time.increase(epochSize + 1);
+      // reverts because all fund are distributed
+      await expectRevert(
+        newVesting.updateRank(0, { from: oracle }),
+        "vesting it's finalized"
+      );
+    });
   });
 
+  describe('vesting simulation', async () => {
+    before(async () => {
+      this.token = await EMDXToken.new({ from: owner });
+      this.vesting = await Vesting.new(
+        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+      );
+    });
+
+    it('rank value range', async () => {
+      const numberOfBeneficiaries = 50;
+      const scores = [0, 16, 12, 56, 23, 12, 0, 90, 74, 90, 100];
+      let highScore = 0;
+      // Grant all vestings
+      for (let i = 0; i < numberOfBeneficiaries; i++) {
+        await this.vesting.grantVesting(accounts[i], 100, { from: operator });
+      }
+      // Transfer funds to contract
+      await this.token.transfer(
+        this.vesting.address, numberOfBeneficiaries * 100, { from: owner }
+      );
+      // Initialize contract
+      await this.vesting.initialize({ from: operator });
+      // Ranking update should fail
+      await expectRevert(
+        this.vesting.updateRank(1, { from: oracle }),
+        "scoring epoch still not finished"
+      );
+      // Vesting demo
+      for (let i = 0; i < scores.length; i++) {
+        let currentScore = scores[i];
+        await time.increase(scoringEpochSize + 1);
+        await this.vesting.updateRank(currentScore, { from: oracle });
+        if (highScore < currentScore) {
+          highScore = currentScore;
+        }
+        for (let i = 0; i < numberOfBeneficiaries; i++) {
+          let vDetails = await this.vesting.vestingDetails(accounts[i]);
+          let percentageReleased = vDetails.releasedAmount.mul(new BN(100)).div(vDetails.totalAmount);
+          assert.equal(percentageReleased.toString(), highScore.toString());
+        }
+      }
+    });
+  });
 });

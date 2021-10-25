@@ -4,7 +4,7 @@
   "description": "",
   "main": "truffle.js",
   "scripts": {
-    "test": "./scripts/test.sh",
+    "test": "mocha --exit --recursive --timeout 50000",
     "coverage": "./scripts/coverage.sh",
     "flatten": "./scripts/flatten.sh",
     "compile": "node_modules/.bin/truffle compile",
