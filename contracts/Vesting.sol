@@ -132,58 +132,33 @@ contract Vesting is Ownable {
         rankUdatedAt = _currentTime();
 
         for (uint256 i = 0; i < beneficiaries.length; i++) {
-            uint256 unreleased = _releasableAmount(beneficiaries[i]);
-
-            locks[beneficiaries[i]].releasedAmount = locks[beneficiaries[i]]
+            // calculate already vested percentage
+            uint256 vestedPercentage = locks[beneficiaries[i]]
                 .releasedAmount
-                .add(unreleased);
+                .mul(100)
+                .div(locks[beneficiaries[i]].totalAmount);
 
-            require(
-                IERC20(token).transfer(beneficiaries[i], unreleased),
-                "token transfer fail"
-            );
+            if (vestedPercentage < lastCmcRank) {
+                // calculate unreleased funds
+                uint256 unreleased = lastCmcRank
+                    .mul(locks[beneficiaries[i]].totalAmount)
+                    .div(100)
+                    .sub(locks[beneficiaries[i]].releasedAmount);
+                // update released amount
+                locks[beneficiaries[i]].releasedAmount = locks[beneficiaries[i]]
+                    .releasedAmount
+                    .add(unreleased);
+                // transfer tokens
+                require(
+                    IERC20(token).transfer(beneficiaries[i], unreleased),
+                    "token transfer fail"
+                );
+            }
         }
 
-        if (_newCmcRank == 100) {
-            finalized = true;
-        }
+        if (_newCmcRank == 100) finalized = true;
 
         emit RankingUpdated(_newCmcRank);
-    }
-
-    /// @notice This function can be executed by the beneficiaries to check the
-    /// state of the vesting.
-    /// @dev This function returns a tuple with the following values:
-    ///  totalAmount = the total amount of the vesting.
-    ///  releasedAmount = the amount of tokens that has already vested.
-    function vestingDetails(address _beneficiary)
-        external
-        view
-        returns (
-            uint256 totalAmount,
-            uint256 releasedAmount
-        )
-    {
-        totalAmount = locks[_beneficiary].totalAmount;
-        releasedAmount = locks[_beneficiary].releasedAmount;
-    }
-
-    function _releasableAmount(address _beneficiary)
-        internal
-        view
-        returns (uint256 releasableAmount)
-    {
-        uint256 vestedPercentage = locks[_beneficiary]
-            .releasedAmount
-            .mul(100)
-            .div(locks[_beneficiary].totalAmount);
-
-        if (vestedPercentage < lastCmcRank) {
-            releasableAmount = lastCmcRank
-                .mul(locks[_beneficiary].totalAmount)
-                .div(100)
-                .sub(locks[_beneficiary].releasedAmount);
-        }
     }
 
     function _currentTime() internal view returns (uint256) {

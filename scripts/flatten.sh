@@ -8,6 +8,7 @@ fi
 
 files=(
     ./contracts/EMDXToken.sol
+    ./contracts/Vesting.sol
 )
 
 for filename in "${files[@]}"; do
