@@ -152,7 +152,7 @@ describe('Vesting', async () => {
       // contract balance == 3
       await this.vesting.initialize({ from: operator });
       assert.equal(await this.vesting.initialized(), true);
-      should.not.equal(await this.vesting.rankUdatedAt(), 0);
+      should.not.equal(await this.vesting.scoreUdatedAt(), 0);
     });
   });
 
@@ -209,7 +209,7 @@ describe('Vesting', async () => {
     });
   });
 
-  describe('#updateRank', async () => {
+  describe('#updateScore', async () => {
     beforeEach(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
@@ -217,27 +217,27 @@ describe('Vesting', async () => {
       );
     });
 
-    it('only oracle can update rank', async () => {
+    it('only oracle can update score', async () => {
       await expectRevert(
-        this.vesting.updateRank(1, { from: operator }),
+        this.vesting.updateScore(1, { from: operator }),
         "caller is not the oracle"
       );
       await expectRevert(
-        this.vesting.updateRank(1, { from: owner }),
+        this.vesting.updateScore(1, { from: owner }),
         "caller is not the oracle"
       );
     });
 
-    it('can not update rank if it is not initialized', async () => {
+    it('can not update score if it is not initialized', async () => {
       await expectRevert(
-        this.vesting.updateRank(1, { from: oracle }),
+        this.vesting.updateScore(1, { from: oracle }),
         "vesting has not been initialized"
       );
     });
 
-    it('can not update rank if it is not initialized', async () => {
+    it('can not update score if it is not initialized', async () => {
       await expectRevert(
-        this.vesting.updateRank(1, { from: oracle }),
+        this.vesting.updateScore(1, { from: oracle }),
         "vesting has not been initialized"
       );
     });
@@ -247,36 +247,36 @@ describe('Vesting', async () => {
       await this.vesting.grantVesting(beneficiary, 1, { from: operator });
       await this.vesting.initialize({ from: operator });
 
-      // Try to update rank before 1h
+      // Try to update score before 1h
       await expectRevert(
-        this.vesting.updateRank(1, { from: oracle }),
+        this.vesting.updateScore(1, { from: oracle }),
         "scoring epoch still not finished"
       );
     });
 
-    it('rank value range', async () => {
+    it('score value range', async () => {
       await this.token.transfer(this.vesting.address, 1, { from: owner });
       await this.vesting.grantVesting(beneficiary, 1, { from: operator });
       await this.vesting.initialize({ from: operator });
 
       await time.increase(scoringEpochSize + 1);
-      // values below 0 are not tested since _newCmcRank parameter of updateRank
+      // values below 0 are not tested since _newScore parameter of updateScore
       // function is uint8 (unsigned integer)
       await expectRevert(
-        this.vesting.updateRank(101, { from: oracle }),
-        "invalid rank value"
+        this.vesting.updateScore(101, { from: oracle }),
+        "invalid score value"
       );
 
-      const receipt = await this.vesting.updateRank(100, { from: oracle });
+      const receipt = await this.vesting.updateScore(100, { from: oracle });
       assert.equal(await this.token.balanceOf(beneficiary), 1);
-      assert.equal((await this.vesting.lastCmcRank()).toString(), "100");
+      assert.equal((await this.vesting.lastScore()).toString(), "100");
       assert.equal(await this.vesting.finalized(), true);
-      expectEvent(receipt, 'RankingUpdated', { cmcRankValue: "100" });
+      expectEvent(receipt, 'ScoreUpdated', { score: "100" });
 
       await time.increase(scoringEpochSize + 1);
       // reverts because all fund are distributed
       await expectRevert(
-        this.vesting.updateRank(0, { from: oracle }),
+        this.vesting.updateScore(0, { from: oracle }),
         "vesting it's finalized"
       );
     });
@@ -304,16 +304,16 @@ describe('Vesting', async () => {
       );
       // Initialize contract
       await this.vesting.initialize({ from: operator });
-      // Ranking update should fail
+      // Score update should fail
       await expectRevert(
-        this.vesting.updateRank(1, { from: oracle }),
+        this.vesting.updateScore(1, { from: oracle }),
         "scoring epoch still not finished"
       );
       // Vesting demo
       for (let i = 0; i < scores.length; i++) {
         let currentScore = scores[i];
         await time.increase(scoringEpochSize + 1);
-        await this.vesting.updateRank(currentScore, { from: oracle });
+        await this.vesting.updateScore(currentScore, { from: oracle });
         if (highScore < currentScore) {
           highScore = currentScore;
         }

@@ -6,6 +6,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// The vesting schedule is subject to the token’s volume-ratio formula score.
+/// The volume-ratio formula measures the volume percentile scored by the Token
+/// within a group of tokens that conformed the top 100 CMC Rank during the
+/// prior 60-day period (the “Scoring Epoch”). This means that if the Percentile
+/// Score is equals 43, 43% of the tokens in each group will be distributed.
+/// The Percentile Score will be shown on the platform during the first day
+/// after each Scoring Epoch ends (day 61). Distribution of the correspondent
+/// percentage will be executed through an automated distribution system.
+
 contract Vesting is Ownable {
     using SafeMath for uint8;
     using SafeMath for uint256;
@@ -13,8 +22,8 @@ contract Vesting is Ownable {
     address public token;
     address public operator;
     address public oracle;
-    uint8 public lastCmcRank;
-    uint256 public rankUdatedAt;
+    uint8 public lastScore;
+    uint256 public scoreUdatedAt;
     uint256 public totalVestingAmount;
     uint256 public scoringEpochSize = 60 days;
     bool public initialized;
@@ -28,7 +37,7 @@ contract Vesting is Ownable {
     mapping(address => LockVesting) public locks;
     address[] beneficiaries;
 
-    event RankingUpdated(uint8 cmcRankValue);
+    event ScoreUpdated(uint8 score);
 
     modifier onlyOperator() {
         require(msg.sender == operator, "caller is not the operator");
@@ -78,7 +87,7 @@ contract Vesting is Ownable {
             "vesting amount and token balance are different"
         );
         initialized = true;
-        rankUdatedAt = _currentTime();
+        scoreUdatedAt = _currentTime();
     }
 
     /// @notice This function it's executed by the operator and grants
@@ -113,23 +122,23 @@ contract Vesting is Ownable {
     }
 
     /// @notice This function it's executed by the oracle account to update the
-    /// CMC ranking value and release the funds if it is possible.
+    /// Percentil Score value and release the funds if it is possible.
     /// @dev This function returns a tuple with the following values:
-    /// @param _newCmcRank new CMS rank value.
-    function updateRank(uint8 _newCmcRank)
+    /// @param _newScore new percentile score value.
+    function updateScore(uint8 _newScore)
         external
         onlyOracle
         isInitialized
         notFinalized
     {
         require(
-            rankUdatedAt + scoringEpochSize < _currentTime(),
+            scoreUdatedAt + scoringEpochSize < _currentTime(),
             "scoring epoch still not finished"
         );
-        require(_newCmcRank <= 100, "invalid rank value");
+        require(_newScore <= 100, "invalid score value");
 
-        lastCmcRank = _newCmcRank;
-        rankUdatedAt = _currentTime();
+        lastScore = _newScore;
+        scoreUdatedAt = _currentTime();
 
         for (uint256 i = 0; i < beneficiaries.length; i++) {
             // calculate already vested percentage
@@ -138,9 +147,9 @@ contract Vesting is Ownable {
                 .mul(100)
                 .div(locks[beneficiaries[i]].totalAmount);
 
-            if (vestedPercentage < lastCmcRank) {
+            if (vestedPercentage < lastScore) {
                 // calculate unreleased funds
-                uint256 unreleased = lastCmcRank
+                uint256 unreleased = lastScore
                     .mul(locks[beneficiaries[i]].totalAmount)
                     .div(100)
                     .sub(locks[beneficiaries[i]].releasedAmount);
@@ -156,9 +165,9 @@ contract Vesting is Ownable {
             }
         }
 
-        if (_newCmcRank == 100) finalized = true;
+        if (_newScore == 100) finalized = true;
 
-        emit RankingUpdated(_newCmcRank);
+        emit ScoreUpdated(_newScore);
     }
 
     function _currentTime() internal view returns (uint256) {
