@@ -26,6 +26,7 @@ contract Vesting is Ownable {
     uint256 public scoreUdatedAt;
     uint256 public totalVestingAmount;
     uint256 public scoringEpochSize = 60 days;
+    uint256 public epochNumber;
     bool public initialized;
     bool public finalized;
 
@@ -37,7 +38,7 @@ contract Vesting is Ownable {
     mapping(address => LockVesting) public locks;
     address[] beneficiaries;
 
-    event ScoreUpdated(uint8 score);
+    event ScoreUpdated(uint8 score, uint256 indexed epochNumber);
 
     modifier onlyOperator() {
         require(msg.sender == operator, "caller is not the operator");
@@ -88,6 +89,7 @@ contract Vesting is Ownable {
         );
         initialized = true;
         scoreUdatedAt = _currentTime();
+        epochNumber = 1;
     }
 
     /// @notice This function it's executed by the operator and grants
@@ -139,20 +141,24 @@ contract Vesting is Ownable {
 
         lastScore = _newScore;
         scoreUdatedAt = _currentTime();
+        epochNumber = epochNumber + 1;
 
-        for (uint256 i = 0; i < beneficiaries.length; i++) {
-            // calculate already vested percentage
-            uint256 vestedPercentage = locks[beneficiaries[i]]
-                .releasedAmount
-                .mul(100)
-                .div(locks[beneficiaries[i]].totalAmount);
-
-            if (vestedPercentage < lastScore) {
-                // calculate unreleased funds
-                uint256 unreleased = lastScore
+        if (_newScore != 0) {
+            for (uint256 i = 0; i < beneficiaries.length; i++) {
+                // calculate already vested percentage
+                uint256 remainingPercentage = locks[beneficiaries[i]]
+                    .totalAmount
+                    .sub(locks[beneficiaries[i]].releasedAmount)
+                    .mul(100)
+                    .div(locks[beneficiaries[i]].totalAmount);
+                // calculate percentage to be vested
+                uint256 releasablePercentage = (remainingPercentage > lastScore)
+                    ? lastScore
+                    : remainingPercentage;
+                // calculate amount to be vested
+                uint256 unreleased = releasablePercentage
                     .mul(locks[beneficiaries[i]].totalAmount)
-                    .div(100)
-                    .sub(locks[beneficiaries[i]].releasedAmount);
+                    .div(100);
                 // update released amount
                 locks[beneficiaries[i]].releasedAmount = locks[beneficiaries[i]]
                     .releasedAmount
@@ -165,9 +171,10 @@ contract Vesting is Ownable {
             }
         }
 
-        if (_newScore == 100) finalized = true;
+        if (locks[beneficiaries[0]].releasedAmount == locks[beneficiaries[0]].totalAmount)
+            finalized = true;
 
-        emit ScoreUpdated(_newScore);
+        emit ScoreUpdated(_newScore, epochNumber - 1);
     }
 
     function _currentTime() internal view returns (uint256) {
