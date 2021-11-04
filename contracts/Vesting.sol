@@ -145,34 +145,30 @@ contract Vesting is Ownable {
 
         if (_newScore != 0) {
             for (uint256 i = 0; i < beneficiaries.length; i++) {
+                // current beneficiary
+                LockVesting memory lock = locks[beneficiaries[i]];
                 // calculate already vested percentage
-                uint256 remainingPercentage = locks[beneficiaries[i]]
-                    .totalAmount
-                    .sub(locks[beneficiaries[i]].releasedAmount)
-                    .mul(100)
-                    .div(locks[beneficiaries[i]].totalAmount);
-                // calculate percentage to be vested
-                uint256 releasablePercentage = (remainingPercentage > lastScore)
-                    ? lastScore
-                    : remainingPercentage;
+                uint256 remainingAmount = lock.totalAmount.sub(
+                    lock.releasedAmount
+                );
                 // calculate amount to be vested
-                uint256 unreleased = releasablePercentage
-                    .mul(locks[beneficiaries[i]].totalAmount)
+                uint256 releasableAmount = _newScore
+                    .mul(remainingAmount)
                     .div(100);
                 // update released amount
-                locks[beneficiaries[i]].releasedAmount = locks[beneficiaries[i]]
+                locks[beneficiaries[i]].releasedAmount = lock
                     .releasedAmount
-                    .add(unreleased);
+                    .add(releasableAmount);
                 // transfer tokens
                 require(
-                    IERC20(token).transfer(beneficiaries[i], unreleased),
+                    IERC20(token).transfer(beneficiaries[i], releasableAmount),
                     "token transfer fail"
                 );
             }
-        }
 
-        if (locks[beneficiaries[0]].releasedAmount == locks[beneficiaries[0]].totalAmount)
-            finalized = true;
+            if (locks[beneficiaries[0]].releasedAmount == locks[beneficiaries[0]].totalAmount)
+                finalized = true;
+        }
 
         emit ScoreUpdated(_newScore, epochNumber - 1);
     }
