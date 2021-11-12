@@ -12,14 +12,19 @@ const {
 const { ZERO_ADDRESS } = constants;
 
 const EMDXToken = contract.fromArtifact('EMDXToken');
-const Vesting = contract.fromArtifact("VestingTest");
+const Vesting = contract.fromArtifact("Vesting");
+
+function random(min, max) {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+}
 
 describe('Vesting', async () => {
   const owner = accounts[60];
   const operator = accounts[61]
   const oracle = accounts[62];
   const beneficiary = accounts[63];
-  const scoringEpochSize = 50;
+  const oneDay = 60 * 60 * 24;
+  const scoringEpochSize = oneDay * 60; // 60 days
   const ZERO = new BN(0);
 
   describe('#constructor', async () => {
@@ -29,7 +34,7 @@ describe('Vesting', async () => {
 
     it('check constructor parameters', async () => {
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
 
       const op = await this.vesting.operator();
@@ -47,20 +52,15 @@ describe('Vesting', async () => {
 
     it('validate constructor parameters', async () => {
       await expectRevert(
-        Vesting.new(ZERO_ADDRESS, operator, oracle, scoringEpochSize),
+        Vesting.new(ZERO_ADDRESS, operator, oracle),
         "token address is required"
       );
       await expectRevert(
-        Vesting.new(this.token.address, ZERO_ADDRESS, oracle, scoringEpochSize),
+        Vesting.new(this.token.address, ZERO_ADDRESS, oracle),
         "operator address is required"
       );
       await expectRevert(
-        Vesting.new(
-          this.token.address,
-          operator,
-          ZERO_ADDRESS,
-          scoringEpochSize
-        ),
+        Vesting.new(this.token.address, operator, ZERO_ADDRESS),
         "oracle address is required"
       );
     });
@@ -70,7 +70,7 @@ describe('Vesting', async () => {
     before(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
     })
 
@@ -108,7 +108,7 @@ describe('Vesting', async () => {
     before(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
     });
 
@@ -153,7 +153,6 @@ describe('Vesting', async () => {
       // contract balance == 3
       await this.vesting.initialize({ from: operator });
       assert.equal(await this.vesting.initialized(), true);
-      should.not.equal(await this.vesting.scoreUdatedAt(), 0);
     });
   });
 
@@ -161,7 +160,7 @@ describe('Vesting', async () => {
     beforeEach(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
     });
 
@@ -214,7 +213,7 @@ describe('Vesting', async () => {
     beforeEach(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
     });
 
@@ -248,10 +247,10 @@ describe('Vesting', async () => {
       await this.vesting.grantVesting(beneficiary, 1, { from: operator });
       await this.vesting.initialize({ from: operator });
 
-      // Try to update score before eposh finished
+      // Try to update score before epoch finished
       await expectRevert(
         this.vesting.updateScore(1, { from: oracle }),
-        "scoring epoch still not finished"
+        "scoring epoch 1 still not finished"
       );
     });
 
@@ -268,39 +267,122 @@ describe('Vesting', async () => {
         "invalid score value"
       );
 
-      assert.equal((await this.vesting.epochNumber()).toString(), "1");
-      const receipt = await this.vesting.updateScore(100, { from: oracle });
-      assert.equal((await this.vesting.epochNumber()).toString(), "2");
+      await this.vesting.updateScore(100, { from: oracle });
+
       assert.equal(await this.token.balanceOf(beneficiary), 1);
       assert.equal((await this.vesting.lastScore()).toString(), "100");
-      this.vesting.updateScore(0, { from: oracle }),
+
+      await expectRevert(
+        this.vesting.updateScore(0, { from: oracle }),
         "vesting it's finalized"
+      );
     });
   });
 
-  describe('vesting simulation', async () => {
-    before(async () => {
+  describe('update score and epoch validations', async () => {
+    const numberOfBeneficiaries = 5;
+    const score = 3;
+
+    beforeEach(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
-        this.token.address, operator, oracle, scoringEpochSize, { from: owner }
+        this.token.address, operator, oracle, { from: owner }
       );
-    });
 
-    it('demo', async () => {
-      const numberOfBeneficiaries = 50;
-      const scores = [0, 10, 12, 0, 56, 20, 90, 5, 0, 100];
-      let previousDetails = [];
       // Grant all vestings
       for (let i = 0; i < numberOfBeneficiaries; i++) {
         await this.vesting.grantVesting(accounts[i], 100000, { from: operator });
       }
+
       // Transfer funds to contract
       await this.token.transfer(
         this.vesting.address, numberOfBeneficiaries * 100000, { from: owner }
       );
+
       // Initialize contract
       await this.vesting.initialize({ from: operator });
-      // Vesting demo
+    });
+
+    it('update score before epoch one ends (lower limit of the window)', async () => {
+      await time.increase(1);
+      await expectRevert(
+        this.vesting.updateScore(new BN(score), { from: oracle }),
+        "scoring epoch 1 still not finished"
+      );
+    });
+
+    it('update score before epoch one ends (upper limit of the window)', async () => {
+      await time.increase(oneDay);
+      await expectRevert(
+        this.vesting.updateScore(new BN(score), { from: oracle }),
+        "scoring epoch 1 still not finished"
+      );
+    });
+
+    it('update score before epoch one ends (mean window time)', async () => {
+      await time.increase(oneDay / 1);
+      await expectRevert(
+        this.vesting.updateScore(new BN(score), { from: oracle }),
+        "scoring epoch 1 still not finished"
+      );
+    });
+
+    it('update score after epoch one ends (lower limit of the window)', async () => {
+      await time.increase(scoringEpochSize);
+      await expectRevert(
+        this.vesting.updateScore(new BN(score), { from: oracle }),
+        "scoring epoch 1 still not finished"
+      );
+
+      await time.increase(1);
+      await this.vesting.updateScore(new BN(score), { from: oracle });
+    });
+
+    it('update score after epoch one ends (upper limit of the window)', async () => {
+      await time.increase(scoringEpochSize + oneDay);
+      this.vesting.updateScore(new BN(score), { from: oracle });
+    });
+
+    it('update score after update window ends', async () => {
+      await time.increase(scoringEpochSize + oneDay + 1);
+      await expectRevert(
+        this.vesting.updateScore(new BN(score), { from: oracle }),
+        "scoring epoch still not finished"
+      );
+    });
+  });
+
+  describe('complete vesting simulation', async () => {
+    const numberOfBeneficiaries = 50;
+    const scores = [0, 10, 12, 0, 56, 20, 90, 5, 0, 100];
+
+    before(async () => {
+      this.token = await EMDXToken.new({ from: owner });
+      this.vesting = await Vesting.new(
+        this.token.address, operator, oracle, { from: owner }
+      );
+
+      // Grant all vestings
+      for (let i = 0; i < numberOfBeneficiaries; i++) {
+        await this.vesting.grantVesting(accounts[i], 100000, { from: operator });
+      }
+
+      // Transfer funds to contract
+      await this.token.transfer(
+        this.vesting.address, numberOfBeneficiaries * 100000, { from: owner }
+      );
+
+      // Initialize contract
+      await this.vesting.initialize({ from: operator });
+    });
+
+
+    it('complete demo', async () => {
+      let previousDetails = [];
+      let epochNumber = 0;
+      let lastRandomTime = 0;
+
+      // VESTING DEMO START >>>
       for (let i = 0; i < scores.length; i++) {
         let currentScore = new BN(scores[i]);
 
@@ -317,9 +399,18 @@ describe('Vesting', async () => {
           }
           previousDetails[i] = details;
         }
+
         // update score
-        await time.increase(scoringEpochSize + 1);
-        await this.vesting.updateScore(currentScore, { from: oracle });
+        epochNumber++;
+        randomTime = random(1, oneDay);
+        await time.increase(scoringEpochSize - lastRandomTime + randomTime);
+        lastRandomTime = randomTime;
+        let tx = await this.vesting.updateScore(currentScore, { from: oracle });
+        expectEvent(tx, 'ScoreUpdated', {
+          score: currentScore,
+          epochNumber: new BN(epochNumber),
+        });
+
         // check beneficiaries vesting status
         for (let i = 0; i < numberOfBeneficiaries; i++) {
           let currentDetails = await this.vesting.locks(accounts[i]);
@@ -335,12 +426,15 @@ describe('Vesting', async () => {
           );
         }
       }
+      // <<< VESTING DEMO END
+
       // Check if the tokens are all released
       currentDetails = await this.vesting.locks(accounts[0]);
       assert.equal(
         currentDetails.releasedAmount.toString(),
         currentDetails.totalAmount.toString()
       );
+
       // Check if the contrat it is finalized
       assert.equal(await this.vesting.finalized(), true);
       await time.increase(scoringEpochSize + 1);

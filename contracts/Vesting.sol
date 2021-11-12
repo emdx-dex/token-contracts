@@ -17,18 +17,21 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Vesting is Ownable {
     using SafeMath for uint8;
+    using SafeMath for uint32;
     using SafeMath for uint256;
 
+    // Variables
     address public token;
     address public operator;
     address public oracle;
     uint8 public lastScore;
-    uint256 public scoreUdatedAt;
+    uint256 public initializedAt;
     uint256 public totalVestingAmount;
-    uint256 public scoringEpochSize = 60 days;
-    uint256 public epochNumber;
     bool public initialized;
     bool public finalized;
+
+    // Constants
+    uint32 public constant EPOCH_SIZE = 60 days;
 
     struct LockVesting {
         uint256 totalAmount;
@@ -88,8 +91,7 @@ contract Vesting is Ownable {
             "vesting amount and token balance are different"
         );
         initialized = true;
-        scoreUdatedAt = _currentTime();
-        epochNumber = 1;
+        initializedAt = _currentTime();
     }
 
     /// @notice This function it's executed by the operator and grants
@@ -125,7 +127,6 @@ contract Vesting is Ownable {
 
     /// @notice This function it's executed by the oracle account to update the
     /// Percentil Score value and release the funds if it is possible.
-    /// @dev This function returns a tuple with the following values:
     /// @param _newScore new percentile score value.
     function updateScore(uint8 _newScore)
         external
@@ -133,15 +134,22 @@ contract Vesting is Ownable {
         isInitialized
         notFinalized
     {
+        require(_newScore <= 100, "invalid score value");
         require(
-            scoreUdatedAt + scoringEpochSize < _currentTime(),
+            _currentTime().sub(initializedAt) > EPOCH_SIZE,
+            "scoring epoch 1 still not finished"
+        );
+
+        uint256 timeFromLastEpoch = _currentTime().sub(initializedAt).mod(
+            EPOCH_SIZE
+        );
+
+        require(
+            timeFromLastEpoch > 0 && timeFromLastEpoch <= 1 days,
             "scoring epoch still not finished"
         );
-        require(_newScore <= 100, "invalid score value");
 
         lastScore = _newScore;
-        scoreUdatedAt = _currentTime();
-        epochNumber = epochNumber + 1;
 
         if (_newScore != 0) {
             for (uint256 i = 0; i < beneficiaries.length; i++) {
@@ -152,9 +160,9 @@ contract Vesting is Ownable {
                     lock.releasedAmount
                 );
                 // calculate amount to be vested
-                uint256 releasableAmount = _newScore
-                    .mul(remainingAmount)
-                    .div(100);
+                uint256 releasableAmount = _newScore.mul(remainingAmount).div(
+                    100
+                );
                 // update released amount
                 locks[beneficiaries[i]].releasedAmount = lock
                     .releasedAmount
@@ -166,11 +174,22 @@ contract Vesting is Ownable {
                 );
             }
 
-            if (locks[beneficiaries[0]].releasedAmount == locks[beneficiaries[0]].totalAmount)
+            if (
+                locks[beneficiaries[0]].releasedAmount ==
+                locks[beneficiaries[0]].totalAmount
+            )
                 finalized = true;
         }
 
-        emit ScoreUpdated(_newScore, epochNumber - 1);
+        emit ScoreUpdated(_newScore, _epochNumber() - 1);
+    }
+
+    function epochNumber() external view returns (uint256) {
+        return _epochNumber();
+    }
+
+    function _epochNumber() internal view returns (uint256) {
+        return _currentTime().sub(initializedAt).div(EPOCH_SIZE).add(1);
     }
 
     function _currentTime() internal view returns (uint256) {
