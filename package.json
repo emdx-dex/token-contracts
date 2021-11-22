@@ -2,14 +2,14 @@
   "name": "emdx-token",
   "version": "0.0.1",
   "description": "",
-  "main": "truffle.js",
+  "main": "truffle-config.js",
   "scripts": {
     "test": "node_modules/.bin/mocha --exit --recursive --timeout 50000",
     "coverage": "./scripts/coverage.sh",
     "flatten": "./scripts/flatten.sh",
     "compile": "node_modules/.bin/truffle compile",
-    "migrate:kovan": "node_modules/.bin/truffle migrations --network kovan",
-    "console:kovan": "node_modules/.bin/truffle console --network kovan",
+    "migrate:fuji": "node_modules/.bin/truffle migrations --network fuji",
+    "console:fuji": "node_modules/.bin/truffle console --network fuji",
     "console:develop": "node_modules/.bin/truffle development",
     "lint": "solhint \"contracts/**/*.sol\""
   },

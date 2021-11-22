@@ -25,15 +25,15 @@ module.exports = {
       network_id: '*'
     },
 
-    kovan: {
+    fuji: {
       provider: () => {
         return new HDWalletProvider(
           process.env.DEPLOYER_MNENOMIC,
-          "https://kovan.infura.io/v3/" + process.env.INFURA_API_KEY
+          process.env.RPC_URL
         )
       },
-      network_id: 42,
-      gasPrice: 1000000000
+      network_id: 1,
+      gasPrice: 25000000000
     }
   },
 

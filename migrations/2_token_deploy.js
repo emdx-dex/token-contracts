@@ -8,11 +8,28 @@ require('@openzeppelin/test-helpers/configure')({
 });
 
 const EMDXToken = artifacts.require('EMDXToken');
+const Vesting = artifacts.require('Vesting');
 
 module.exports = async function (deployer, network, accounts) {
-  const OWNER = network == 'kovan'
-    ? process.env.DEPLOYER_ADDRESS
-    : accounts[0];
+  let owner, operator, oracle;
+  if (network == 'fuji-fork') {
+    owner = process.env.DEPLOYER_ADDRESS;
+    operator = process.env.OPERATOR_ADDRESS;
+    oracle = process.env.ORACLE_ADDRESS;
+  } else {
+    owner = accounts[0];
+    operator = accounts[1];
+    oracle = accounts[2];
+  }
 
-  await deployer.deploy(EMDXToken, { from: OWNER });
+  deployer.deploy(EMDXToken, { from: owner })
+    .then(() => {
+      return deployer.deploy(
+        Vesting,
+        EMDXToken.address,
+        operator,
+        oracle,
+        { from: owner }
+      );
+    });
 };
