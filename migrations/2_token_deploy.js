@@ -12,7 +12,7 @@ const Vesting = artifacts.require('Vesting');
 
 module.exports = async function (deployer, network, accounts) {
   let owner, operator, oracle;
-  if (network == 'fuji-fork') {
+  if (['fuji-fork', 'fuji'].includes(network)) {
     owner = process.env.DEPLOYER_ADDRESS;
     operator = process.env.OPERATOR_ADDRESS;
     oracle = process.env.ORACLE_ADDRESS;

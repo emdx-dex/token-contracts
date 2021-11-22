@@ -6,21 +6,21 @@ module.exports = {
   networks: {
 
     development: {
-      host: "127.0.0.1",
+      host: '127.0.0.1',
       port: 8545,
-      network_id: "*",
+      network_id: '*',
     },
 
     coverage: {
-      host: "127.0.0.1",
-      network_id: "*",
+      host: '127.0.0.1',
+      network_id: '*',
       port: 8555,
       gas: 0xfffffffffff,
       gasPrice: 0x01,
     },
 
     ganache: {
-      host: "127.0.0.1",
+      host: '127.0.0.1',
       port: 8545,
       network_id: '*'
     },
@@ -37,7 +37,14 @@ module.exports = {
     }
   },
 
-  plugins: ["solidity-coverage"],
+  plugins: [
+    'solidity-coverage',
+    'truffle-plugin-verify'
+  ],
+
+  api_keys: {
+    etherscan: process.env.ETHERSCAN_API_KEY
+  },
 
   mocha: {
     timeout: 50000
@@ -45,7 +52,7 @@ module.exports = {
 
   compilers: {
     solc: {
-      version: "0.8.9",
+      version: '0.8.9',
       settings: {
         optimizer: {
           enabled: true,

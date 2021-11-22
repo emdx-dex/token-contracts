@@ -6,7 +6,7 @@ require('dotenv').config({
 const Migrations = artifacts.require("Migrations");
 
 module.exports = function (deployer, network, accounts) {
-  const OWNER = network == 'fuji-fork'
+  const OWNER = ['fuji-fork', 'fuji'].includes(network)
     ? process.env.DEPLOYER_ADDRESS
     : accounts[0];
 
