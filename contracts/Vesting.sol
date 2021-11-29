@@ -26,6 +26,7 @@ contract Vesting is Ownable {
     address public oracle;
     uint8 public lastScore;
     uint256 public initializedAt;
+    uint256 public updatedAt;
     uint256 public totalVestingAmount;
     bool public initialized;
     bool public finalized;
@@ -149,7 +150,13 @@ contract Vesting is Ownable {
             "scoring epoch still not finished"
         );
 
+        require(
+            _currentTime().sub(updatedAt) > 1 days,
+            "can not update score value twise in the same window"
+        );
+
         lastScore = _newScore;
+        updatedAt = _currentTime();
 
         if (_newScore != 0) {
             for (uint256 i = 0; i < beneficiaries.length; i++) {

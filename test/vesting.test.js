@@ -270,6 +270,42 @@ describe('Vesting', async () => {
         "vesting is finalized"
       );
     });
+
+    it('can not update the score twice in the same update window', async () => {
+      await this.token.transfer(this.vesting.address, 100, { from: owner });
+      await this.vesting.grantVesting(beneficiary, 100, { from: operator });
+      await this.vesting.initialize({ from: operator });
+
+      await time.increase(scoringEpochSize + 1);
+
+      await this.vesting.updateScore(1, { from: oracle });
+
+      await expectRevert(
+        this.vesting.updateScore(1, { from: oracle }),
+        "can not update score value twise in the same window"
+      );
+
+      await time.increase(oneDay-2);
+
+      await expectRevert(
+        this.vesting.updateScore(1, { from: oracle }),
+        "can not update score value twise in the same window"
+      );
+
+      await time.increase(1);
+
+      await expectRevert(
+        this.vesting.updateScore(1, { from: oracle }),
+        "can not update score value twise in the same window"
+      );
+
+      await time.increase(1);
+
+      await expectRevert(
+        this.vesting.updateScore(1, { from: oracle }),
+        "scoring epoch still not finished"
+      );
+    });
   });
 
   describe('update score and epoch validations', async () => {
