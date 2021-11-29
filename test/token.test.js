@@ -27,7 +27,7 @@ describe('EMDXToken', () => {
   });
 
   it('has 1B cap', async () => {
-    expect(await this.token.cap()).to.be.bignumber.equal(cap);
+    expect(await this.token.balanceOf(owner)).to.be.bignumber.equal(cap);
   });
 
   it('assigns the total supply to the owner', async () => {

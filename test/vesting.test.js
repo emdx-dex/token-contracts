@@ -66,7 +66,7 @@ describe('Vesting', async () => {
     });
   });
 
-  describe('#grantVesing', async () => {
+  describe('#grantVesting', async () => {
     before(async () => {
       this.token = await EMDXToken.new({ from: owner });
       this.vesting = await Vesting.new(
@@ -74,7 +74,7 @@ describe('Vesting', async () => {
       );
     })
 
-    it('only operator can execute grantVesing function', async () => {
+    it('only operator can execute grantVesting function', async () => {
       await expectRevert(
         this.vesting.grantVesting(beneficiary, 1, { from: beneficiary }),
         "caller is not the operator"
@@ -235,13 +235,6 @@ describe('Vesting', async () => {
       );
     });
 
-    it('can not update score if it is not initialized', async () => {
-      await expectRevert(
-        this.vesting.updateScore(1, { from: oracle }),
-        "vesting has not been initialized"
-      );
-    });
-
     it('can not update before 1st epoch ends', async () => {
       await this.token.transfer(this.vesting.address, 1, { from: owner });
       await this.vesting.grantVesting(beneficiary, 1, { from: operator });
@@ -274,7 +267,7 @@ describe('Vesting', async () => {
 
       await expectRevert(
         this.vesting.updateScore(0, { from: oracle }),
-        "vesting it's finalized"
+        "vesting is finalized"
       );
     });
   });
@@ -435,12 +428,12 @@ describe('Vesting', async () => {
         currentDetails.totalAmount.toString()
       );
 
-      // Check if the contrat it is finalized
+      // Check if the contract it is finalized
       assert.equal(await this.vesting.finalized(), true);
       await time.increase(scoringEpochSize + 1);
       await expectRevert(
         this.vesting.updateScore(22, { from: oracle }),
-        "vesting it's finalized"
+        "vesting is finalized"
       );
     });
   });

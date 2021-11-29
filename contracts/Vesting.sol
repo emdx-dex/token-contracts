@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -64,7 +64,7 @@ contract Vesting is Ownable {
     }
 
     modifier notFinalized() {
-        require(!finalized, "vesting it's finalized");
+        require(!finalized, "vesting is finalized");
         _;
     }
 
@@ -94,8 +94,8 @@ contract Vesting is Ownable {
         initializedAt = _currentTime();
     }
 
-    /// @notice This function it's executed by the operator and grants
-    /// the vesting for the beneficiary.
+    /// @notice This function is executed by the operator and grants the vesting
+    /// for the beneficiary.
     /// @param _beneficiary is the beneficiary address.
     /// @param _amount the amount of tokens that will be locked in the vesting
     function grantVesting(address _beneficiary, uint256 _amount)
@@ -116,7 +116,7 @@ contract Vesting is Ownable {
     }
 
     function setOperator(address _operator) external onlyOwner {
-        require(_operator != address(0), "oracle address is required");
+        require(_operator != address(0), "operator address is required");
         operator = _operator;
     }
 
@@ -181,15 +181,15 @@ contract Vesting is Ownable {
                 finalized = true;
         }
 
-        emit ScoreUpdated(_newScore, _epochNumber() - 1);
+        emit ScoreUpdated(_newScore, _epochNumber());
     }
 
     function epochNumber() external view returns (uint256) {
-        return _epochNumber();
+        return _epochNumber().add(1);
     }
 
     function _epochNumber() internal view returns (uint256) {
-        return _currentTime().sub(initializedAt).div(EPOCH_SIZE).add(1);
+        return _currentTime().sub(initializedAt).div(EPOCH_SIZE);
     }
 
     function _currentTime() internal view returns (uint256) {

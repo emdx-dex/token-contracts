@@ -17,7 +17,7 @@
   "license": "ISC",
   "dependencies": {
     "@openzeppelin/contracts": "^4.3.2",
-    "solc": "0.8.9",
+    "solc": "0.8.10",
     "truffle": "^5.4.13",
     "truffle-plugin-verify": "^0.5.18"
   },
