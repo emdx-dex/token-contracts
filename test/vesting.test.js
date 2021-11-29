@@ -207,6 +207,26 @@ describe('Vesting', async () => {
       expect(details.totalAmount.toString()).to.equal('1');
       expect(details.releasedAmount.toString()).to.equal('0');
     });
+
+    it('max size of lock amount', async () => {
+      const maxAmount =
+        (new BN(2)).pow(new BN(256)).sub(new BN(1)).div(new BN(99));
+
+      await this.vesting.grantVesting(
+        beneficiary, maxAmount, { from: operator }
+      );
+
+      await expectRevert(
+        this.vesting.grantVesting(
+          beneficiary, maxAmount.add(new BN(1)), { from: operator }
+        ),
+        "amount exceeds the maximum allowed value"
+      );
+
+      await this.vesting.grantVesting(
+        accounts[64], await this.token.balanceOf(owner), { from: operator }
+      );
+    });
   });
 
   describe('#updateScore', async () => {
@@ -285,7 +305,7 @@ describe('Vesting', async () => {
         "can not update score value twise in the same window"
       );
 
-      await time.increase(oneDay-2);
+      await time.increase(oneDay - 2);
 
       await expectRevert(
         this.vesting.updateScore(1, { from: oracle }),

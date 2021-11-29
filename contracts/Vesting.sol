@@ -31,8 +31,10 @@ contract Vesting is Ownable {
     bool public initialized;
     bool public finalized;
 
-    // Constants
+    // CONSTANTS
     uint32 public constant EPOCH_SIZE = 60 days;
+    /// @dev this is to avoid possible overflow in fund distribution calculation
+    uint256 private MAX_LOCK_AMOUNT = uint256(2**256 - 1).div(99);
 
     struct LockVesting {
         uint256 totalAmount;
@@ -104,6 +106,10 @@ contract Vesting is Ownable {
         onlyOperator
         notInitialized
     {
+        require(
+            _amount <= MAX_LOCK_AMOUNT,
+            "amount exceeds the maximum allowed value"
+        );
         require(_amount != 0, "amount is required");
         require(_beneficiary != address(0), "beneficiary address is required");
         require(
