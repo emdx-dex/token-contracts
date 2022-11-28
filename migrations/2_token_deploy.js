@@ -9,6 +9,7 @@ require('@openzeppelin/test-helpers/configure')({
 
 const EMDXToken = artifacts.require('EMDXToken');
 const Vesting = artifacts.require('Vesting');
+const Staking = artifacts.require('Staking');
 
 module.exports = async function (deployer, network, accounts) {
   let owner, operator, oracle;
@@ -24,6 +25,10 @@ module.exports = async function (deployer, network, accounts) {
 
   deployer.deploy(EMDXToken, { from: owner })
     .then(() => {
+      deployer.deploy(
+        Staking
+      );
+
       return deployer.deploy(
         Vesting,
         EMDXToken.address,
