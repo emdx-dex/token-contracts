@@ -7,31 +7,37 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Staking is Ownable {
-    // Variables
     uint256 public initializedAt;
     bool public initialized;
     uint256 public cooldown = 12 days;
 
     IERC20 public token;
 
+    // ~ Six months
+    uint256 public freezeTime = 174 days;
+
     uint256 public totalSupply;
     mapping(address => uint256) public balanceOf;
+    mapping(address => uint256) public withdrawalRequest;
 
     event InitializeStaking(uint256 _initializedAt);
+    event SetCooldown(uint256 _cooldown);
     event Stake(address _from, uint256 _amount);
+    event Withdraw(address _from, uint256 _amount);
+    event WithdrawRequest(address _from);
 
     modifier isInitialized() {
-        require(initialized, "Staking has not been initialized");
+        require(initialized, "Staking has not been initialized.");
         _;
     }
 
     modifier isWithdrawalAllowed() {
-        require(initializedAt >= 24 weeks);
+        require(initializedAt > freezeTime);
         _;
     }
 
     constructor(address _token) {
-        require(_token != address(0), "token address is required");
+        require(_token != address(0), "_token is required.");
 
         token = IERC20(_token);
     }
@@ -43,12 +49,8 @@ contract Staking is Ownable {
         emit InitializeStaking(initializedAt);
     }
 
-    function setCooldown(uint256 _cooldown) public onlyOwner {
-        cooldown = _cooldown;
-    }
-
-    function stake(uint256 _amount) public isInitialized {
-        require(_amount > 0, "amount = 0");
+    function stake(uint256 _amount) public {
+        require(_amount > 0, "_amount should be grater than 0.");
 
         token.transferFrom(msg.sender, address(this), _amount);
         balanceOf[msg.sender] += _amount;
@@ -57,11 +59,39 @@ contract Staking is Ownable {
         emit Stake(msg.sender, _amount);
     }
 
-    function withdraw() public {
-        // This function is to withdraw tokens.
+    function requestWithdrawal() public {
+        withdrawalRequest[msg.sender] = block.timestamp;
+
+        emit WithdrawRequest(msg.sender);
+    }
+
+    function withdraw(uint256 _amount) public isWithdrawalAllowed {
+        require(_amount > 0, "_amount should be greater than 0");
+        require(_amount <= balanceOf[msg.sender], "_amount is greater than balance.");
+        require(block.timestamp > withdrawalRequest[msg.sender], "Pending cooldown time.");
+        
+        balanceOf[msg.sender] -= _amount;
+        totalSupply -= _amount;
+        token.transfer(msg.sender, _amount);
+
+        emit Withdraw(msg.sender, _amount);
     }
 
     function claim() public {
         // This function is to claim rewards.
+    }
+
+    // Setters
+    function setCooldown(uint256 _cooldown) public onlyOwner {
+        require(_cooldown > 0, "_cooldown should be greater than 0");
+
+        cooldown = _cooldown;
+
+        emit SetCooldown(_cooldown);
+    }
+
+    // View
+    function isWithdrawalEnabled() public view returns (bool) {
+        return initialized && block.timestamp >= (initializedAt + freezeTime);
     }
 }
