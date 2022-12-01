@@ -31,8 +31,13 @@ contract Staking is Ownable {
         _;
     }
 
-    modifier isWithdrawalAllowed() {
-        require(initializedAt > freezeTime);
+    modifier isWithdrawAllowed() {
+        require(initializedAt > freezeTime, "Withdraw is not allowed.");
+        _;
+    }
+
+    modifier checkWithdrawalRequest() {
+        require(block.timestamp >= (withdrawalRequest[msg.sender] + cooldown), "Cooldown time pending.");
         _;
     }
 
@@ -59,17 +64,17 @@ contract Staking is Ownable {
         emit Stake(msg.sender, _amount);
     }
 
-    function requestWithdrawal() public {
+    function requestWithdrawal() public isWithdrawAllowed {
         withdrawalRequest[msg.sender] = block.timestamp;
 
         emit WithdrawRequest(msg.sender);
     }
 
-    function withdraw(uint256 _amount) public isWithdrawalAllowed {
-        require(_amount > 0, "_amount should be greater than 0");
+    function withdraw(uint256 _amount) public isWithdrawAllowed checkWithdrawalRequest {
+        require(_amount > 0, "_amount should be greater than 0.");
         require(_amount <= balanceOf[msg.sender], "_amount is greater than balance.");
-        require(block.timestamp > withdrawalRequest[msg.sender], "Pending cooldown time.");
         
+        withdrawalRequest[msg.sender] = 0;
         balanceOf[msg.sender] -= _amount;
         totalSupply -= _amount;
         token.transfer(msg.sender, _amount);
@@ -83,7 +88,7 @@ contract Staking is Ownable {
 
     // Setters
     function setCooldown(uint256 _cooldown) public onlyOwner {
-        require(_cooldown > 0, "_cooldown should be greater than 0");
+        require(_cooldown > 0, "_cooldown should be greater than 0.");
 
         cooldown = _cooldown;
 
