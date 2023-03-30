@@ -8,7 +8,7 @@ const EMDXToken = contract.fromArtifact('EMDXToken');
 
 describe('EMDXToken', () => {
   const [owner] = accounts;
-  const cap = ether('1000000000');
+  const cap = ether('750000000');
 
   beforeEach(async () => {
     this.token = await EMDXToken.new({ from: owner });
@@ -26,7 +26,7 @@ describe('EMDXToken', () => {
     (await this.token.decimals()).should.be.bignumber.equal("18");
   });
 
-  it('has 1B cap', async () => {
+  it('has 750M cap', async () => {
     expect(await this.token.balanceOf(owner)).to.be.bignumber.equal(cap);
   });
 
