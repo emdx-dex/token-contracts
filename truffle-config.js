@@ -32,7 +32,7 @@ module.exports = {
           process.env.RPC_URL
         )
       },
-      network_id: 1,
+      network_id: 43113,
       gasPrice: 25000000000
     }
   },
